@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "subject": "Cannot access account",
+    "body": "Contact me at john.smith@example.org or on +44 20 7946 0958. I was browsing from 198.51.100.23."
+  },
+  {
+    "id": 2,
+    "subject": "Payment failed",
+    "body": "The page at https://example.org/help/payment failed and my email is john.smith@example.org."
+  }
+]

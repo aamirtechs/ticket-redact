@@ -1,0 +1,19 @@
+{
+  "name": "ticket-redact",
+  "version": "1.0.0",
+  "description": "Offline CLI that strips PII (emails, phone numbers, credit cards, IBANs, IPs, URLs) from exported support tickets and chat transcripts, with consistent placeholders across a file and a redaction report that never prints raw PII. Safe exports for QA, training and AI tools.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "ticket-redact": "src/cli.js"
+  },
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [],
+  "author": "Amir Hussain"
+}
