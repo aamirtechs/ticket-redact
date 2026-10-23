@@ -77,6 +77,26 @@ footer .links a{margin:0 10px}
   .grid{grid-template-columns:1fr}
 }
 </style>
+
+<style>
+.tool label{display:block;font-weight:600;margin:14px 0 6px;color:var(--navy)}
+.tool input[type=file]{width:100%;padding:12px;border:1.5px dashed #b9c6d4;border-radius:9px;background:#fbfcfe;font:inherit}
+.tool textarea{width:100%;min-height:110px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;font-family:Consolas,'Liberation Mono',monospace;font-size:13.5px;background:#fff}
+.tool select{padding:9px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff}
+.tool .row{display:flex;gap:14px;flex-wrap:wrap}
+.tool .row>div{flex:1;min-width:200px}
+button.go{background:var(--gold);color:#171106;border:0;font:inherit;font-weight:700;padding:12px 26px;border-radius:9px;cursor:pointer;margin-top:16px}
+button.go:hover{background:var(--gold2)}
+button.dl{background:var(--navy);color:#fff;border:0;font:inherit;font-weight:600;padding:10px 18px;border-radius:9px;cursor:pointer;margin:10px 8px 0 0}
+#status{margin-top:14px;font-weight:600}
+#status.error{color:#b3261e}
+pre.out{max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+.dragover{outline:3px solid var(--gold);outline-offset:4px}
+.hidden{display:none}
+.check{display:flex;gap:8px;align-items:center;font-weight:600;margin-top:14px}
+.check input{width:18px;height:18px}
+ul.counts{margin:10px 0 0 18px}
+</style>
 </head>
 <body>
 <header class="hero">
@@ -86,29 +106,122 @@ footer .links a{margin:0 10px}
   <a class="btn" href="https://github.com/aamirtechs/ticket-redact">View source on GitHub</a>
 </header>
 <main class="wrap">
-  <section>
-    <h2>What it does</h2>
-    <div class="grid">
-      <div class="card">Email addresses and international phone numbers, including country code formats</div>
-      <div class="card">Credit cards validated with the Luhn check, so random order numbers are left alone</div>
-      <div class="card">IBANs validated with the mod-97 check, plus IPv4 addresses with octet range validation</div>
-      <div class="card">URLs starting with http or https</div>
-      <div class="card">Consistent placeholders: the same value becomes the same placeholder across the whole file, and the report contains counts by type only, never raw values</div>
+
+<section class="tool" id="tool">
+  <h2>Use it in your browser</h2>
+  <p class="note">Runs fully in your browser, files never leave your device. Drop a CSV or JSON ticket export below, or paste its contents. Emails, phone numbers, credit cards (Luhn checked), IBANs (mod-97 checked), IP addresses and URLs are replaced with consistent placeholders, and the report shows counts only, never raw values.</p>
+  <label for="file">Ticket export (.csv or .json)</label>
+  <input type="file" id="file" accept=".csv,.json">
+  <p class="note" id="dropName">You can also drag and drop the file anywhere on this panel.</p>
+  <div class="row">
+    <div>
+      <label for="fmt">Format</label>
+      <select id="fmt"><option value="csv">CSV</option><option value="json">JSON</option></select>
     </div>
-  </section>
-  <section>
-    <h2>Install and usage</h2>
-    <p class="note">Requires Node.js 20 or later. There are no dependencies to install.</p>
-    <pre><code>git clone https://github.com/aamirtechs/ticket-redact.git
-cd ticket-redact
-node src/cli.js examples/tickets.csv redacted.csv --report report.md
-node src/cli.js examples/tickets.json redacted.json --report report.md</code></pre>
-    <p class="note">Input and output formats are chosen by file extension, .csv or .json. The same value always becomes the same placeholder within one run, for example the first distinct email becomes a single numbered email placeholder everywhere it appears.</p>
-  </section>
+  </div>
+  <label for="paste">Or paste export contents</label>
+  <textarea id="paste" placeholder="Paste CSV rows or a JSON array of tickets"></textarea>
+  <button class="go" id="run">Redact tickets</button>
+  <div id="status" role="status"></div>
+  <ul class="counts" id="counts"></ul>
+  <div id="downloads"></div>
+</section>
+<section id="reportWrap" class="hidden">
+  <h2>Redaction report (report.md)</h2>
+  <pre class="out" id="report"></pre>
+  <h2 style="margin-top:22px">Redacted output preview</h2>
+  <pre class="out" id="preview"></pre>
+</section>
+
 </main>
 <footer>
   <p>Built by Amir Hussain, operations manager and founder of AamirTechs.</p>
   <p class="links"><a href="https://aamirtechs.com">AamirTechs: operations, customer support and e-commerce services</a> <a href="https://github.com/aamirtechs">More open source tools</a></p>
 </footer>
+<script src="app.js"></script>
+<script>
+(function () {
+
+function download(name, text, type) {
+  var blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+}
+function makeDl(label, name, text, type) {
+  var b = document.createElement('button'); b.className = 'dl'; b.textContent = label;
+  b.addEventListener('click', function () { download(name, text, type); });
+  return b;
+}
+function wireDrop(zone, input, store) {
+  zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', function () { zone.classList.remove('dragover'); });
+  zone.addEventListener('drop', function (e) {
+    e.preventDefault(); zone.classList.remove('dragover');
+    var f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    store.file = f;
+    try { var dt = new DataTransfer(); dt.items.add(f); input.files = dt.files; } catch (err) {}
+    var note = document.getElementById('dropName');
+    if (note) note.textContent = 'Loaded file: ' + f.name;
+  });
+}
+async function readInput(store, input, textarea) {
+  var f = store.file || (input.files && input.files[0]);
+  if (f) return { text: await f.text(), name: f.name };
+  return { text: textarea.value, name: '' };
+}
+
+var store = {};
+var fileEl = document.getElementById('file');
+wireDrop(document.getElementById('tool'), fileEl, store);
+fileEl.addEventListener('change', function () {
+  var f = fileEl.files && fileEl.files[0];
+  if (f && /\.json$/i.test(f.name)) document.getElementById('fmt').value = 'json';
+  if (f && /\.csv$/i.test(f.name)) document.getElementById('fmt').value = 'csv';
+});
+document.getElementById('run').addEventListener('click', async function () {
+  var status = document.getElementById('status');
+  var downloads = document.getElementById('downloads');
+  var countsEl = document.getElementById('counts');
+  var reportWrap = document.getElementById('reportWrap');
+  status.className = ''; status.textContent = ''; downloads.innerHTML = ''; countsEl.innerHTML = ''; reportWrap.classList.add('hidden');
+  try {
+    var input = await readInput(store, fileEl, document.getElementById('paste'));
+    if (!input.text.trim()) { status.className = 'error'; status.textContent = 'Choose a ticket export file or paste its contents first.'; return; }
+    var fmt = document.getElementById('fmt').value;
+    if (input.name && /\.json$/i.test(input.name)) fmt = 'json';
+    if (input.name && /\.csv$/i.test(input.name)) fmt = 'csv';
+    var api = window.TicketRedact;
+    var redactor = new api.Redactor();
+    var outText, outName;
+    if (fmt === 'json') {
+      var data = JSON.parse(input.text);
+      outText = JSON.stringify(redactor.redactValue(data), null, 2) + '\n';
+      outName = input.name ? input.name.replace(/\.json$/i, '') + '-redacted.json' : 'redacted.json';
+    } else {
+      var rows = api.parseCsv(input.text);
+      var outRows = rows.map(function (r) { return r.map(function (c) { return redactor.redactText(c); }); });
+      outText = api.toCsv(outRows);
+      outName = input.name ? input.name.replace(/\.csv$/i, '') + '-redacted.csv' : 'redacted.csv';
+    }
+    var report = redactor.report();
+    var total = Object.values(redactor.counts).reduce(function (a, b) { return a + b; }, 0);
+    status.textContent = 'Redacted ' + total + ' values.';
+    Object.keys(redactor.counts).forEach(function (type) {
+      if (!redactor.counts[type]) return;
+      var li = document.createElement('li'); li.textContent = type + ': ' + redactor.counts[type]; countsEl.appendChild(li);
+    });
+    downloads.appendChild(makeDl('Download ' + outName, outName, outText, fmt === 'json' ? 'application/json;charset=utf-8' : 'text/csv;charset=utf-8'));
+    downloads.appendChild(makeDl('Download report.md', 'report.md', report, 'text/markdown;charset=utf-8'));
+    document.getElementById('report').textContent = report;
+    document.getElementById('preview').textContent = outText;
+    reportWrap.classList.remove('hidden');
+  } catch (e) { status.className = 'error'; status.textContent = e.message; }
+});
+
+})();
+</script>
 </body>
 </html>

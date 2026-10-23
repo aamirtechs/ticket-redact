@@ -1,5 +1,6 @@
 # ticket-redact
 Live page: https://aamirtechs.github.io/ticket-redact/
+Use it in your browser: the Pages site above runs the full tool locally, no install needed.
 
 Offline CLI that strips PII (emails, phone numbers, credit cards, IBANs, IPs, URLs) from exported support tickets and chat transcripts, with consistent placeholders across a file and a redaction report that never prints raw PII. Safe exports for QA, training and AI tools.
 
